@@ -520,6 +520,8 @@ std::vector<std::string> ColumnFamilyData::GetDbPaths() const {
 const uint32_t ColumnFamilyData::kDummyColumnFamilyDataId =
     std::numeric_limits<uint32_t>::max();
 
+OmniCache* g_oc_ = nullptr;
+
 ColumnFamilyData::ColumnFamilyData(
     uint32_t id, const std::string& name, Version* _dummy_versions,
     Cache* _table_cache, WriteBufferManager* write_buffer_manager,
@@ -575,6 +577,9 @@ ColumnFamilyData::ColumnFamilyData(
           "Failed to register data paths of column family (id: %d, name: %s)",
           id_, name_.c_str());
     }
+    oc_ = new OmniCache(cf_options);
+//    oc_ = new OmniCache(cf_options,cfd_dbptr_);
+    g_oc_ = oc_;
   }
   Ref();
 

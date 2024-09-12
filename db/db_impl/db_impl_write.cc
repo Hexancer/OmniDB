@@ -2379,10 +2379,47 @@ size_t DBImpl::GetWalPreallocateBlockSize(uint64_t write_buffer_size) const {
   return bsize;
 }
 
+Status DB::Put_OC_Delete(const Slice& key, const Slice& value) {
+  WriteOptions wopt;
+  ColumnFamilyHandle* default_cf_ = DefaultColumnFamily();
+  return Put_OC_Delete_(wopt, default_cf_, key, value);
+}
+
+// original put
+Status DB::Put_OC_Delete_(const WriteOptions& opt,
+                          ColumnFamilyHandle* column_family, const Slice& key,
+                          const Slice& value) {
+  // Pre-allocate size of write batch conservatively.
+  // 8 bytes are taken by header, 4 bytes for count, 1 byte for type,
+  // and we allocate 11 extra bytes for key length, as well as value length.
+  WriteBatch batch(key.size() + value.size() + 24, 0 /* max_bytes */,
+                   opt.protection_bytes_per_key, 0 /* default_cf_ts_sz */);
+  Status s = batch.Put(column_family, key, value);
+  if (!s.ok()) {
+    return s;
+  }
+  return Write(opt, &batch);
+}
+
 // Default implementations of convenience methods that subclasses of DB
 // can call if they wish
 Status DB::Put(const WriteOptions& opt, ColumnFamilyHandle* column_family,
                const Slice& key, const Slice& value) {
+  if (OmniCache::Enabled()) {
+    auto cfh = static_cast_with_check<ColumnFamilyHandleImpl>(column_family);
+    auto& oc = cfh->cfd()->oc_;
+    try {
+      //              oc->Insert(key, value); //Update value
+      auto p = oc->Seek(key);
+      if (p->Valid() && p->Key() == key) {
+        p->Value() = value.ToString();
+        return Status::OK();
+      }
+    } catch (const std::exception& e) {
+      return Status::IOError("Exception during OC check in Put");
+    }
+  }
+
   // Pre-allocate size of write batch conservatively.
   // 8 bytes are taken by header, 4 bytes for count, 1 byte for type,
   // and we allocate 11 extra bytes for key length, as well as value length.

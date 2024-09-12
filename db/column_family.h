@@ -20,6 +20,7 @@
 #include "db/table_properties_collector.h"
 #include "db/write_batch_internal.h"
 #include "db/write_controller.h"
+#include "rocksdb/omnicache.h"
 #include "options/cf_options.h"
 #include "rocksdb/compaction_job_stats.h"
 #include "rocksdb/db.h"
@@ -650,6 +651,10 @@ class ColumnFamilyData {
   bool mempurge_used_;
 
   std::atomic<uint64_t> next_epoch_number_;
+
+ public:
+  OmniCache* oc_;
+  DB* cfd_dbptr_;
 };
 
 // ColumnFamilySet has interesting thread-safety requirements

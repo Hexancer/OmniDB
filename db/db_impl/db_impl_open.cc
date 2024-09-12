@@ -1943,6 +1943,8 @@ IOStatus DBImpl::CreateWAL(const WriteOptions& write_options,
   return io_s;
 }
 
+DB *pDBImpl = nullptr;
+
 Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
                     const std::vector<ColumnFamilyDescriptor>& column_families,
                     std::vector<ColumnFamilyHandle*>* handles, DB** dbptr,
@@ -1987,6 +1989,7 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
   }
 
   DBImpl* impl = new DBImpl(db_options, dbname, seq_per_batch, batch_per_txn);
+  pDBImpl = impl;
   if (!impl->immutable_db_options_.info_log) {
     s = impl->init_logger_creation_s_;
     delete impl;
@@ -2222,6 +2225,9 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
       if (!cf.options.cf_paths.empty()) {
         paths.emplace_back(cf.options.cf_paths[0].path);
       }
+      auto cfd =
+          impl->versions_->GetColumnFamilySet()->GetColumnFamily(cf.name);
+      cfd->cfd_dbptr_ = *dbptr; // BY GYY
     }
     // Remove duplicate paths.
     std::sort(paths.begin(), paths.end());
@@ -2307,6 +2313,7 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
     delete impl;
     *dbptr = nullptr;
   }
+
   return s;
 }
 }  // namespace ROCKSDB_NAMESPACE

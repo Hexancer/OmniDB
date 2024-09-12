@@ -27,6 +27,17 @@ struct LRUElement {
   std::atomic<size_t> refs_;
 };
 
+template <class T>
+struct CLRUElement {
+  explicit CLRUElement() : next_(nullptr), prev_(nullptr), refs_(0) {}
+
+  virtual ~CLRUElement() { assert(!refs_); }
+
+  T* next_;
+  T* prev_;
+  std::atomic<size_t> refs_;
+};
+
 // LRU implementation
 //
 // In place LRU implementation. There is no copy or allocation involved when

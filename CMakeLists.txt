@@ -44,6 +44,13 @@ project(rocksdb
   HOMEPAGE_URL https://rocksdb.org/
   LANGUAGES CXX C ASM)
 
+add_compile_definitions(GLOG_USE_GLOG_EXPORT)
+find_package(glog REQUIRED)
+find_package(folly REQUIRED)
+list(APPEND THIRDPARTY_LIBS Folly::folly)
+message(STATUS ${FOLLY_INCLUDE_DIR})
+include_directories(${FOLLY_INCLUDE_DIR})
+
 if(APPLE)
   # On macOS Cmake, when cross-compiling, sometimes CMAKE_SYSTEM_PROCESSOR wrongfully stays
   # the same as CMAKE_HOST_SYSTEM_PROCESSOR regardless the target CPU.
@@ -89,6 +96,7 @@ endif(CCACHE_FOUND)
 
 option(WITH_JEMALLOC "build with JeMalloc" OFF)
 option(WITH_LIBURING "build with liburing" ON)
+option(WITH_GRPC "build with gRPC" ON)
 option(WITH_SNAPPY "build with SNAPPY" OFF)
 option(WITH_LZ4 "build with lz4" OFF)
 option(WITH_ZLIB "build with zlib" OFF)
@@ -696,6 +704,7 @@ set(SOURCES
         db/db_impl/db_impl_secondary.cc
         db/db_info_dumper.cc
         db/db_iter.cc
+        db/omnicache.cc
         db/dbformat.cc
         db/error_handler.cc
         db/event_helpers.cc
@@ -770,6 +779,8 @@ set(SOURCES
         memory/memkind_kmem_allocator.cc
         memory/memory_allocator.cc
         memtable/alloc_tracker.cc
+#        memtable/cacheskiplist.cc
+        memtable/follyskiplist.cc
         memtable/hash_linklist_rep.cc
         memtable/hash_skiplist_rep.cc
         memtable/skiplistrep.cc
@@ -1041,6 +1052,64 @@ else()
     env/io_posix.cc)
 endif()
 
+if (WITH_GRPC)
+  option(protobuf_MODULE_COMPATIBLE TRUE)
+  find_package(Protobuf CONFIG REQUIRED)
+
+  set(_PROTOBUF_LIBPROTOBUF protobuf::libprotobuf)
+  set(_REFLECTION gRPC::grpc++_reflection)
+  set(_PROTOBUF_PROTOC $<TARGET_FILE:protobuf::protoc>)
+
+  find_package(gRPC CONFIG REQUIRED)
+
+  set(_GRPC_GRPCPP gRPC::grpc++)
+  set(_GRPC_CPP_PLUGIN_EXECUTABLE $<TARGET_FILE:gRPC::grpc_cpp_plugin>)
+
+  set(PROTO_FILES ${CMAKE_CURRENT_SOURCE_DIR}/monitoring/perfdata.proto)
+
+  # Proto file
+  get_filename_component(perf_proto "${PROTO_FILES}" ABSOLUTE)
+  get_filename_component(perf_proto_path "${perf_proto}" PATH)
+
+  set(perf_proto_srcs "${perf_proto_path}/perfdata.pb.cc")
+  set(perf_proto_hdrs "${perf_proto_path}/perfdata.pb.h")
+  set(perf_grpc_srcs "${perf_proto_path}/perfdata.grpc.pb.cc")
+  set(perf_grpc_hdrs "${perf_proto_path}/perfdata.grpc.pb.h")
+
+  add_custom_command(
+          OUTPUT "${perf_proto_srcs}" "${perf_proto_hdrs}" "${perf_grpc_srcs}" "${perf_grpc_hdrs}"
+          COMMAND ${_PROTOBUF_PROTOC}
+          ARGS --grpc_out "${perf_proto_path}"
+          --cpp_out "${perf_proto_path}"
+          -I "${perf_proto_path}"
+          --plugin=protoc-gen-grpc="${_GRPC_CPP_PLUGIN_EXECUTABLE}"
+          "${perf_proto}"
+          DEPENDS "${perf_proto}")
+
+  include_directories("${perf_proto_path}")
+
+  list(APPEND SOURCES
+          monitoring/perf_data_client.cc
+          ${perf_grpc_srcs}
+          ${perf_grpc_hdrs}
+          ${perf_proto_srcs}
+          ${perf_proto_hdrs})
+  list(APPEND THIRDPARTY_LIBS
+          ${Protobuf_LIBRARIES}
+          ${_GRPC_GRPCPP}
+          )
+  add_executable(perf_data_server
+          monitoring/perf_data_server.cc
+          ${perf_grpc_srcs}
+          ${perf_grpc_hdrs}
+          ${perf_proto_srcs}
+          ${perf_proto_hdrs})
+  target_link_libraries(perf_data_server PRIVATE ${Protobuf_LIBRARIES} ${_GRPC_GRPCPP})
+else ()
+  list(APPEND SOURCES
+          monitoring/perf_data_client_stub.cc)
+endif ()
+
 if(USE_FOLLY_LITE)
   list(APPEND SOURCES
     third-party/folly/folly/container/detail/F14Table.cpp
@@ -1056,8 +1125,8 @@ if(USE_FOLLY_LITE)
   list(APPEND THIRDPARTY_LIBS glog)
 endif()
 
-set(ROCKSDB_STATIC_LIB rocksdb${ARTIFACT_SUFFIX})
-set(ROCKSDB_SHARED_LIB rocksdb-shared${ARTIFACT_SUFFIX})
+set(ROCKSDB_STATIC_LIB rocksdb1${ARTIFACT_SUFFIX})
+set(ROCKSDB_SHARED_LIB rocksdb1-shared${ARTIFACT_SUFFIX})
 
 
 if(WIN32)
@@ -1152,7 +1221,7 @@ if(ROCKSDB_BUILD_SHARED)
                           LINKER_LANGUAGE CXX
                           VERSION ${rocksdb_VERSION}
                           SOVERSION ${rocksdb_VERSION_MAJOR}
-                          OUTPUT_NAME "rocksdb${ARTIFACT_SUFFIX}")
+                          OUTPUT_NAME "rocksdb1${ARTIFACT_SUFFIX}")
   endif()
 endif()
 
@@ -1402,6 +1471,9 @@ if(WITH_TESTS)
         memory/arena_test.cc
         memory/memory_allocator_test.cc
         memtable/inlineskiplist_test.cc
+#        memtable/cache_skiplist_test.cpp
+        memtable/follyskiplist_test.cc
+        memtable/follyskiplist_test1.cc
         memtable/skiplist_test.cc
         memtable/write_buffer_manager_test.cc
         monitoring/histogram_test.cc
@@ -1497,6 +1569,7 @@ if(WITH_TESTS)
       table/mock_table.cc
       utilities/agg_merge/test_agg_merge.cc
       utilities/cassandra/test_utils.cc
+          memtable/follyskiplist.cc
   )
   enable_testing()
   add_custom_target(rocksdb_check COMMAND ${CMAKE_CTEST_COMMAND})

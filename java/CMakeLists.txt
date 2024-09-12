@@ -771,7 +771,7 @@ if(NOT MSVC)
   set_property(TARGET ${ROCKSDB_STATIC_LIB} PROPERTY POSITION_INDEPENDENT_CODE ON)
 endif()
 
-set(ROCKSDBJNI_STATIC_LIB rocksdbjni${ARTIFACT_SUFFIX})
+set(ROCKSDBJNI_STATIC_LIB rocksdbjni1${ARTIFACT_SUFFIX})
 if(MINGW)
   # Build mingw only as staic library.
   add_library(${ROCKSDBJNI_STATIC_LIB} ${JNI_NATIVE_SOURCES})
@@ -782,7 +782,7 @@ add_dependencies(${ROCKSDBJNI_STATIC_LIB} rocksdbjni_headers)
 target_link_libraries(${ROCKSDBJNI_STATIC_LIB} ${ROCKSDB_STATIC_LIB} ${ROCKSDB_LIB})
 
 if(NOT MINGW)
-  set(ROCKSDBJNI_SHARED_LIB rocksdbjni-shared${ARTIFACT_SUFFIX})
+  set(ROCKSDBJNI_SHARED_LIB rocksdbjni1-shared${ARTIFACT_SUFFIX})
   add_library(${ROCKSDBJNI_SHARED_LIB} SHARED ${JNI_NATIVE_SOURCES})
   add_dependencies(${ROCKSDBJNI_SHARED_LIB} rocksdbjni_headers)
   target_link_libraries(${ROCKSDBJNI_SHARED_LIB} ${ROCKSDB_STATIC_LIB} ${ROCKSDB_LIB})
@@ -792,6 +792,12 @@ if(NOT MINGW)
     PROPERTIES
     COMPILE_PDB_OUTPUT_DIRECTORY ${CMAKE_CFG_INTDIR}
     COMPILE_PDB_NAME ${ROCKSDBJNI_STATIC_LIB}.pdb
+  )
+  install(
+          TARGETS ${ROCKSDBJNI_SHARED_LIB}
+          EXPORT RocksDBTargets
+          COMPONENT runtime
+          LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
   )
 endif()
 

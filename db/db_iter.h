@@ -20,6 +20,7 @@
 #include "rocksdb/wide_columns.h"
 #include "table/iterator_wrapper.h"
 #include "util/autovector.h"
+#include "rocksdb/omnicache.h"
 
 namespace ROCKSDB_NAMESPACE {
 class Version;
@@ -201,10 +202,12 @@ class DBIter final : public Iterator {
   Status GetProperty(std::string prop_name, std::string* prop) override;
 
   void Next() final override;
+  void Next_();
   void Prev() final override;
   // 'target' does not contain timestamp, even if user timestamp feature is
   // enabled.
   void Seek(const Slice& target) final override;
+  void Seek_(const Slice& target);
   void SeekForPrev(const Slice& target) final override;
   void SeekToFirst() final override;
   void SeekToLast() final override;
@@ -356,6 +359,8 @@ class DBIter final : public Iterator {
   UserComparatorWrapper user_comparator_;
   const MergeOperator* const merge_operator_;
   IteratorWrapper iter_;
+  std::unique_ptr<OmniCache::OmniCacheIterator> cache_iter_;
+  bool match_ = true;
   const Version* version_;
   ReadCallback* read_callback_;
   // Max visible sequence number. It is normally the snapshot seq unless we have

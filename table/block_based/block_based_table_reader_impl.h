@@ -11,6 +11,7 @@
 
 #include "block.h"
 #include "block_cache.h"
+#include "rocksdb/omnicache.h"
 #include "table/block_based/block_based_table_reader.h"
 #include "table/block_based/reader_common.h"
 
@@ -20,6 +21,7 @@
 // are templates.
 
 namespace ROCKSDB_NAMESPACE {
+extern OmniCache* g_oc_;
 namespace {
 using IterPlaceholderCacheInterface =
     PlaceholderCacheInterface<CacheEntryRole::kMisc>;
@@ -140,7 +142,50 @@ TBlockIter* BlockBasedTable::NewDataBlockIterator(
   } else {
     iter->SetCacheHandle(block.GetCacheHandle());
   }
-
+  // ----------------------------------------------------
+//  auto p = block.GetValue();
+//  if (p != nullptr) {
+//    // 创建数据块迭代器
+//    auto block_iter = p->NewDataIterator(
+//        rep_->internal_comparator.user_comparator(),  // 比较器
+////        kMaxSequenceNumber,                           // 全局序列号
+//        kDisableGlobalSequenceNumber,
+//        nullptr,  // 更新现有的迭代器或创建新的迭代器
+//        nullptr,  // 统计信息对象
+//        false,    // 是否固定块内容
+//        true      // 用户定义的时间戳是否已持久化
+//    );
+//    if (block_iter != nullptr) {
+//      // 迭代并打印块中的键值对
+//      for (block_iter->SeekToFirst(); block_iter->Valid(); block_iter->Next()) {
+//        g_oc_->Insert(block_iter->key(), block_iter->value());
+////        printf("oc insert \n");
+////        g_oc_->cache_skip_list_->PrintAllNodes();
+////        Slice key = block_iter->key();
+////        Slice value = block_iter->value();
+////        printf("Key: %s, Value: %s\n", key.ToString().c_str(),
+////               value.ToString().c_str());
+////        printf("Key: %s, Value (hex): ", key.ToString().c_str());
+////        for (size_t i = 0; i < value.size(); ++i) {
+////          printf("%02x", static_cast<unsigned char>(value.data()[i]));
+////        }
+////        printf("\n");
+////        printf("Key Size: %zu, Value Size: %zu\n", key.size(), value.size());
+//      }
+////      printf("EndEndEndEndEndEndEnd\n");
+//
+//      if (!block_iter->status().ok()) {
+//        printf("Error while iterating over block: %s\n",
+//               block_iter->status().ToString().c_str());
+//      }
+//
+//      // 确保手动释放迭代器以避免内存泄漏
+//      delete block_iter;
+//    } else {
+//      printf("Failed to create block iterator.\n");
+//    }
+//  }
+  // ----------------------------------------------------
   block.TransferTo(iter);
 
   return iter;

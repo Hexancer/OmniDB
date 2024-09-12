@@ -260,6 +260,7 @@ class FilePicker {
         }
         // Increment access count for the current file  GYY
         ++file_access_count_[f];
+        /* PrintFileAccessCount(); */
         return f;
       }
       // Start searching next level.

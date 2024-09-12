@@ -27,6 +27,7 @@
 #include "rocksdb/iterator.h"
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/options.h"
+#include "rocksdb/perf_data_client.h"
 #include "rocksdb/system_clock.h"
 #include "table/internal_iterator.h"
 #include "table/iterator_wrapper.h"
@@ -34,6 +35,8 @@
 #include "util/mutexlock.h"
 #include "util/string_util.h"
 #include "util/user_comparator_wrapper.h"
+
+#include "rocksdb/debug.h"
 
 namespace ROCKSDB_NAMESPACE {
 
@@ -132,11 +135,50 @@ bool DBIter::ParseKey(ParsedInternalKey* ikey) {
 }
 
 void DBIter::Next() {
+  static PERFCOUNTER_DEF("/oc/dbiter/", next_all);
+  static PERFCOUNTER_DEF("/oc/dbiter/", next_hit);
+  static PERFCOUNTER_DEF("/oc/dbiter/", next_miss);
+
+  if (OmniCache::Enabled()) {
+    PERFCOUNTER_INC(next_all);
+    auto oc = cfh_->cfd()->oc_;
+
+    cache_iter_->Next();
+    if (cache_iter_->Valid()) {
+      PERFCOUNTER_INC(next_hit);
+      // OC Hit: return
+      valid_ = true;
+      value_ = cache_iter_->Value();
+      saved_key_.SetUserKey(cache_iter_->Key(), false);
+      direction_ = kForward;
+      status_ = Status::OK();
+      match_ = false;
+    } else {
+      PERFCOUNTER_INC(next_miss);
+      // OC Miss:
+      // TODO: In fact, we don't need seek
+      //     just store a underlying iterator in each EA
+      // refill
+      if (!match_) {
+        Seek_(saved_key_.GetUserKey());
+      }
+      Next_();
+      if (Valid()) {
+        cache_iter_ = oc->Append(saved_key_.GetUserKey(), value());
+      }
+      match_ = true;
+    }
+  } else {
+    Next_();
+  }
+}
+
+void DBIter::Next_() {
   assert(valid_);
   assert(status_.ok());
 
-  PERF_COUNTER_ADD(iter_next_count, 1);
-  PERF_CPU_TIMER_GUARD(iter_next_cpu_nanos, clock_);
+//  PERF_COUNTER_ADD(iter_next_count, 1);
+//  PERF_CPU_TIMER_GUARD(iter_next_cpu_nanos, clock_);
   // Release temporarily pinned blocks from last operation
   ReleaseTempPinnedData();
   ResetBlobValue();
@@ -158,7 +200,7 @@ void DBIter::Next() {
     // to the next internal position.
     assert(iter_.Valid());
     iter_.Next();
-    PERF_COUNTER_ADD(internal_key_skipped_count, 1);
+//    PERF_COUNTER_ADD(internal_key_skipped_count, 1);
   }
 
   local_stats_.next_count_++;
@@ -1454,6 +1496,43 @@ void DBIter::SetSavedKeyToSeekForPrevTarget(const Slice& target) {
 }
 
 void DBIter::Seek(const Slice& target) {
+  static PERFCOUNTER_DEF("/oc/dbiter/", seek_all);
+  static PERFCOUNTER_DEF("/oc/dbiter/", seek_hit);
+  static PERFCOUNTER_DEF("/oc/dbiter/", seek_miss);
+
+  if (OmniCache::Enabled()) {
+    PERFCOUNTER_INC(seek_all);
+    auto oc = cfh_->cfd()->oc_;
+
+    if (cache_iter_ == nullptr) {
+      // TODO: Move to constructor
+      cache_iter_ = oc->NewIterator();
+    }
+    cache_iter_->Seek(target);
+
+    if (cache_iter_->Valid() &&
+        user_comparator_.Compare(cache_iter_->Key(), target) == 0) {
+      PERFCOUNTER_INC(seek_hit);
+      // OC Hit: setup cache_iter_ & return value
+      status_ = Status::OK();
+      valid_ = true;
+      SetSavedKeyToSeekTarget(target);
+      direction_ = kForward;
+      value_ = cache_iter_->Value();
+      match_ = false;
+    } else {
+      PERFCOUNTER_INC(seek_miss);
+      // OC Miss: Seek_ & Insert
+      Seek_(target);
+      cache_iter_ = oc->Insert(saved_key_.GetUserKey(), value());
+      match_ = true;
+    }
+  } else {
+    Seek_(target);
+  }
+}
+
+void DBIter::Seek_(const Slice& target) {
   PERF_COUNTER_ADD(iter_seek_count, 1);
   PERF_CPU_TIMER_GUARD(iter_seek_cpu_nanos, clock_);
   StopWatch sw(clock_, statistics_, DB_SEEK);

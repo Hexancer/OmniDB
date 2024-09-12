@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package rocksdb;
+
+service PerfDataService {
+    rpc SendPerfData (PerfDataRequest) returns (PerfDataResponse);
+}
+
+message PerfDataRequest {
+    double timestamp = 1;
+    repeated Metric metrics = 2;
+}
+
+message Metric {
+    string key = 1;
+    double value = 2;
+}
+
+message PerfDataResponse {
+    PerfResponseStatus status = 1;
+}
+
+enum PerfResponseStatus {
+    SUCCESS = 0;
+    FAILURE = 1;
+    SERVER_NOT_REACHABLE = 2;
+}

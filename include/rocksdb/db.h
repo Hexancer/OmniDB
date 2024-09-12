@@ -2023,6 +2023,12 @@ class DB {
   virtual Status TryCatchUpWithPrimary() {
     return Status::NotSupported("Supported only by secondary instance");
   }
+
+  // For OC ugly
+  Status Put_OC_Delete(const Slice& key, const Slice& value);
+  Status Put_OC_Delete_(const WriteOptions& opt,
+                        ColumnFamilyHandle* column_family,
+                        const Slice& key, const Slice& value);
 };
 
 struct WriteStallStatsMapKeys {

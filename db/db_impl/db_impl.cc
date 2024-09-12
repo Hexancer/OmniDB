@@ -2063,6 +2063,28 @@ Status DBImpl::Get(const ReadOptions& _read_options,
   assert(value != nullptr);
   value->Reset();
 
+  if (OmniCache::Enabled()) {
+    auto cfh = static_cast_with_check<ColumnFamilyHandleImpl>(column_family);
+    auto oc = cfh->cfd()->oc_;
+    try {
+      auto p = oc->Seek(key);
+      if (p->Valid() && p->Key() == key) {
+        Slice found_value = p->Value();  // TODO: if we delete or change
+        // there may have multi thread problem
+        value->PinSelf(found_value);
+        // TODO : we should process the timestamp
+        return Status::OK();
+      }
+
+    } catch (const std::exception& e) {
+      return Status::IOError("Exception during Get in OC");
+    }
+  } else {
+    // TODO : should insert the key and value into OC?
+    // item is hit by get, by scan seek, by scan next ,or either combine of them
+    //  there is no scan and get compound workloads in YCSB
+  }
+
   if (_read_options.io_activity != Env::IOActivity::kUnknown &&
       _read_options.io_activity != Env::IOActivity::kGet) {
     return Status::InvalidArgument(
@@ -2076,6 +2098,13 @@ Status DBImpl::Get(const ReadOptions& _read_options,
   }
 
   Status s = GetImpl(read_options, column_family, key, value, timestamp);
+
+  // OC refill
+  if(OmniCache::Enabled()){
+    auto cfh = static_cast_with_check<ColumnFamilyHandleImpl>(column_family);
+    auto& oc = cfh->cfd()->oc_;
+    oc->Insert(key, Slice(value->data(),value->size()));
+  }
   return s;
 }
 

@@ -152,7 +152,7 @@ public class Environment {
   }
 
   public static String getSharedLibraryName(final String name) {
-    return name + "jni";
+    return name + "jni1-shared";
   }
 
   public static String getSharedLibraryFileName(final String name) {

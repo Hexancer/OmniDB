@@ -12,6 +12,7 @@
 #include <array>
 #include <atomic>
 #include <cstdint>
+#include <iostream>
 #include <limits>
 #include <memory>
 #include <string>
@@ -2276,6 +2277,10 @@ Status BlockBasedTable::Get(const ReadOptions& read_options, const Slice& key,
           &lookup_data_block_context, /*prefetch_buffer=*/nullptr,
           /*for_compaction=*/false, /*async_read=*/false, tmp_status,
           /*use_block_cache_for_lookup=*/true);
+
+      // ======================================================================================
+
+      // ======================================================================================
 
       if (no_io && biter.status().IsIncomplete()) {
         // couldn't get block from block_cache
