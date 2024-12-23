@@ -26,3 +26,5 @@ You could use YCSB benchmark on OmniDB easily.
 ## Reference
 We change the Facebook folly concurrent-skiplist and standard hash-table to store the query result. (https://github.com/facebook/folly/blob/7f69f881f693217889e5765fc07cbcebe8f8918a/folly/ConcurrentSkipList.h#L143)
 
+## Useful Links
+We noticed a interesting skipList-like structure in here. (https://github.com/topling/cspp-memtable)
